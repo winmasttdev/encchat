@@ -177,6 +177,7 @@ header {
 #roomTitle { font-size: 16px; }
 .meta-line { font-size: 12px; color: #8a92b8; }
 .meta-line b { color: #c8cdf0; }
+.fp { color: #3ec9a7; letter-spacing: .5px; }
 
 .status { color: #8a92b8; transition: color .3s; }
 .status.ok { color: #3ec9a7; }

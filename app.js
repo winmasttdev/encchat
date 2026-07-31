@@ -15,6 +15,8 @@
   const state = {
     client: null,
     roomKey: null,
+    topicRoom: '',
+    keyFp: '',
     room: '',
     nick: '',
     sid: '',
@@ -42,7 +44,24 @@
     return u8;
   }
 
-  const aadFor = room => enc.encode('encchat/v1/' + room);
+  const aadFor = topic => enc.encode('encchat/v2/' + topic);
+
+  async function sha256hex(s) {
+    const h = await crypto.subtle.digest('SHA-256', enc.encode(s));
+    return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function topicRoom(room, pass) {
+    const h = await sha256hex('encchat/v2\n' + room + '\n' + pass);
+    return h.slice(0, 16);
+  }
+
+  async function fingerprint(key) {
+    const iv = new Uint8Array(12);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode('encchat-fp-v1')));
+    const hex = [...ct.slice(0, 4)].map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    return hex.slice(0, 4) + '-' + hex.slice(4);
+  }
 
   async function deriveKey(passphrase, room) {
     const material = await crypto.subtle.importKey('raw', enc.encode('encchat:' + passphrase), 'PBKDF2', false, ['deriveKey']);
@@ -83,9 +102,9 @@
     return dec.decode(ct);
   }
 
-  const msgTopic = () => 'encchat/' + state.room + '/msg';
-  const presTopic = sid => 'encchat/' + state.room + '/pres/' + (sid || state.sid);
-  const presSub = () => 'encchat/' + state.room + '/pres/+';
+  const msgTopic = () => 'encchat/v2/' + state.topicRoom + '/msg';
+  const presTopic = sid => 'encchat/v2/' + state.topicRoom + '/pres/' + (sid || state.sid);
+  const presSub = () => 'encchat/v2/' + state.topicRoom + '/pres/+';
 
   function setStatus(text, cls) {
     const el = $('status');
@@ -159,7 +178,7 @@
     if (!state.roomKey) return;
     try {
       const blob = await encryptBlob(state.roomKey, state.history.slice(-500));
-      localStorage.setItem('encchat:hist:' + state.room, blob);
+      localStorage.setItem('encchat:hist:' + state.topicRoom, blob);
     } catch (e) { /* ignore */ }
   }
 
@@ -188,12 +207,14 @@
 
     try {
       state.roomKey = await deriveKey(pass, room);
+      state.topicRoom = await topicRoom(room, pass);
+      state.keyFp = await fingerprint(state.roomKey);
     } catch (e) {
       alert('Ошибка шифрования: ' + e.message);
       return;
     }
 
-    const stored = localStorage.getItem('encchat:hist:' + room);
+    const stored = localStorage.getItem('encchat:hist:' + state.topicRoom);
     if (stored) {
       try {
         state.history = JSON.parse(await decryptBlob(state.roomKey, stored));
@@ -217,6 +238,7 @@
     $('chat').classList.remove('hidden');
     $('roomTitle').textContent = room;
     $('myId').textContent = state.sid;
+    $('keyFp').textContent = state.keyFp;
 
     renderAll();
     connect();
@@ -256,7 +278,7 @@
       { retain: true, qos: 1 }
     );
     setStatus('онлайн · AES-256-GCM', 'ok');
-    addSystem('Соединение установлено. Шифрование активно.');
+    addSystem('Соединение установлено. Отпечаток ключа: ' + state.keyFp + ' — сверь с собеседником.');
   }
 
   async function onMessage(topic, payload) {
@@ -274,9 +296,9 @@
 
       let data;
       try {
-        data = JSON.parse(await decrypt(state.roomKey, aadFor(state.room), outer));
+        data = JSON.parse(await decrypt(state.roomKey, aadFor(state.topicRoom), outer));
       } catch (e) {
-        addSystem('Не удалось расшифровать сообщение. Проверь фразу-пароль или это вмешательство.');
+        addSystem('Не удалось расшифровать сообщение: ключ не совпадает. Сверь отпечаток ключа ' + state.keyFp + ' в шапке с собеседником и проверь фразу-пароль.');
         return;
       }
       if (!data || typeof data.m !== 'string' || !data.n || !data.id) return;
@@ -285,7 +307,7 @@
       if (state.seen.length > 300) state.seen.splice(0, state.seen.length - 300);
 
       addMessage({ n: data.n, t: data.t || Date.now(), m: data.m, me: false });
-    } else if (topic.startsWith('encchat/' + state.room + '/pres/')) {
+    } else if (topic.startsWith('encchat/v2/' + state.topicRoom + '/pres/')) {
       const sid = topic.slice(topic.lastIndexOf('/') + 1);
       let p;
       try { p = JSON.parse(text); } catch (e) { return; }
@@ -302,7 +324,7 @@
 
     const id = uid() + ':' + Date.now().toString(36);
     const plain = JSON.stringify({ id: id, n: state.nick, t: Date.now(), m: val });
-    const payload = await encrypt(state.roomKey, aadFor(state.room), plain);
+    const payload = await encrypt(state.roomKey, aadFor(state.topicRoom), plain);
 
     state.client.publish(msgTopic(), JSON.stringify(payload), { qos: 1 });
 
