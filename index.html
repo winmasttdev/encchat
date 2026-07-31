@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EncChat — зашифрованный мессенджер</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <section id="setup" class="screen">
+    <div class="card">
+      <div class="logo">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+      </div>
+      <h1>EncChat</h1>
+      <p class="sub">Сквозное шифрование AES-256-GCM. Брокер-посредник видит только зашифрованные байты, историю никто кроме вас не хранит.</p>
+
+      <button id="quickBtn" class="quick hidden">Войти как <b id="quickName"></b></button>
+
+      <label>Твой ник
+        <input id="nick" maxlength="24" placeholder="Как тебя зовут?" autocomplete="off">
+      </label>
+
+      <label>Комната
+        <input id="room" maxlength="48" placeholder="название-комнаты" autocomplete="off">
+      </label>
+
+      <label>Фраза-пароль (минимум 6 символов)
+        <input id="pass" type="password" maxlength="128" placeholder="секретная фраза" autocomplete="off">
+      </label>
+
+      <label class="check"><input type="checkbox" id="savePass"> Запомнить фразу-пароль на этом устройстве</label>
+
+      <details class="advanced">
+        <summary>Дополнительно</summary>
+        <label>Брокер (WSS)
+          <select id="broker">
+            <option value="wss://broker.emqx.io:8084/mqtt">EMQX (по умолчанию)</option>
+            <option value="wss://test.mosquitto.org:8081">Mosquitto</option>
+          </select>
+        </label>
+      </details>
+
+      <button id="joinBtn" class="primary">Войти в комнату</button>
+      <p class="hint">Название комнаты и фразу-пароль передай другу другим каналом — не в этом чате.</p>
+    </div>
+  </section>
+
+  <section id="chat" class="screen hidden">
+    <header>
+      <div class="head-left">
+        <strong id="roomTitle"></strong>
+        <span class="meta-line">
+          <span id="status" class="status">отключено</span>
+          <span class="dot">·</span>
+          <span>мой ID: <b id="myId"></b></span>
+        </span>
+      </div>
+      <div class="head-right">
+        <div id="users" class="users"></div>
+        <button id="clearBtn" title="Удалить локальную историю этой комнаты">Очистить</button>
+        <button id="leaveBtn">Выйти</button>
+      </div>
+    </header>
+
+    <main id="messages"></main>
+
+    <footer>
+      <input id="msgInput" placeholder="Сообщение…" maxlength="4000" autocomplete="off">
+      <button id="sendBtn" class="primary">Отправить</button>
+    </footer>
+  </section>
+
+</div>
+<script src="vendor/mqtt.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
